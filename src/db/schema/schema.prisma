@@ -1,0 +1,97 @@
+datasource db {
+  url      = env("DATABASE_URL")
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum AccountOrigin {
+  Local
+  VK
+  Telegram
+}
+
+model Domain {
+  id Int @id @default(autoincrement())
+
+  createdAt DateTime @default(now())
+
+  name       String // 'talkiiing'
+  domainName String @unique // 'l.s.talkiiing.ru'
+
+  ownerId Int
+  owner   Account @relation(fields: [ownerId], references: [id])
+
+  dnsRecord String // any hash than need to be in DNS TXT record
+
+  members Membership[]       @relation("DomainMembers")
+  deploys Deploy[]
+  invites DomainInvitation[]
+}
+
+model Deploy {
+  id Int @id @default(autoincrement())
+
+  createdAt DateTime @default(now())
+  createdBy Int
+  creator   Account  @relation(fields: [createdBy], references: [id])
+
+  domainId Int
+  domain   Domain @relation(fields: [domainId], references: [id])
+
+  url       String @unique // unique shorten string like 'igX8'
+  targetUrl String // 'https://talkiiing.ru/promo/?utm_source=link&utm_medium=link&utm_campaign=link'
+}
+
+model DomainInvitation {
+  id Int @id @default(autoincrement())
+
+  createdAt DateTime @default(now())
+  createdBy Int
+  creator   Account  @relation(fields: [createdBy], references: [id], name: "InviteCreator")
+
+  domainId Int
+  domain   Domain @relation(fields: [domainId], references: [id])
+
+  inviteeId Int
+  invitee   Account @relation(fields: [inviteeId], references: [id], name: "IncomingInvite")
+
+  inviteString    String      @unique
+  connectedMember Membership?
+
+  @@unique([domainId, inviteeId])
+}
+
+model Membership {
+  id Int @id @default(autoincrement())
+
+  createdAt DateTime @default(now())
+
+  domainId Int
+  domain   Domain @relation(fields: [domainId], references: [id], name: "DomainMembers")
+
+  invitationId Int              @unique
+  invitation   DomainInvitation @relation(fields: [invitationId], references: [id])
+
+  accountId Int
+  account   Account @relation(fields: [accountId], references: [id])
+}
+
+model Account {
+  id         Int           @id @default(autoincrement())
+  email      String?
+  password   String
+  origin     AccountOrigin @default(Local)
+  externalId Int
+
+  ownedDomains Domain[]
+  memberOf     Membership[]
+
+  deploys         Deploy[]
+  outgoingInvites DomainInvitation[] @relation("InviteCreator")
+  incomingInvites DomainInvitation[] @relation("IncomingInvite")
+
+  @@unique([origin, externalId])
+}
